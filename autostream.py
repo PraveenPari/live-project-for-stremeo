@@ -35,8 +35,11 @@ def get_channel_live_url(channel_url):
         'quiet': True,
         'ignoreerrors': True,
         'no_warnings': True,
-        # 'cookiefile': 'cookies.txt', # useful if ever provided
     }
+    
+    if os.path.exists('cookies.txt'):
+        print("Using cookies.txt for authentication...")
+        ydl_opts['cookiefile'] = 'cookies.txt'
     
     with YoutubeDL(ydl_opts) as ydl:
         try:
