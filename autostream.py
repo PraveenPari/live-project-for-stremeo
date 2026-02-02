@@ -28,9 +28,7 @@ def get_channel_live_url(channel_url):
     """
     print(f"Checking for live stream on: {channel_url}")
     
-    print(f"Checking for live stream on: {channel_url}")
-    
-    # 1. Try Streamlink FIRST (Often better for simple live checks without blocking)
+    # 1. Try Streamlink FIRST
     print("Attempting to fetch with Streamlink first...")
     
     # Ensure checking /live if it's a channel
@@ -46,22 +44,12 @@ def get_channel_live_url(channel_url):
         if streams:
             if 'best' in streams:
                 print("Live stream found via Streamlink!")
-                # For streamlink, we might get a raw hls url. 
-                # Returing the original URL might be safer if we want to pipe it, 
-                # BUT if we want to confirm it is live, getting the stream url is proof.
-                # We return the original target_url or channel_url to indicate "Yes it is live".
-                # But wait, the main loop expects a URL to stream. 
-                # If we return the HLS URL, yt-dlp might fail to pipe it if it expires.
-                # Let's return the channel_url (or target_url) so stream_facebook can handle it.
                 return target_url
     except Exception as e:
         print(f"Streamlink error: {e}")
 
-    # 2. Try yt-dlp SECOND (Fallback or for detailed metadata)
+    # 2. Try yt-dlp SECOND (Fallback)
     print("Streamlink failed or found no stream. Attempting yt-dlp...")
-    ydl_opts = {
-    
-    # Ensure checking /live if it's a channel
     ydl_opts = {
         'format': 'best',
         'quiet': True,
