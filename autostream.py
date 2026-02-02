@@ -29,7 +29,8 @@ def get_channel_live_url(channel_url):
     # Ensure we are checking the /live endpoint if generic channel URL is provided
     # Streamlink handles channel URLs well, but explicit /live is safer for "is live now" logic on some platforms
     target_url = channel_url
-    if 'youtube.com' in channel_url and not channel_url.endswith('/live'):
+    # Only append /live if it's a channel URL (not a specific video)
+    if 'youtube.com' in channel_url and not channel_url.endswith('/live') and 'watch?v=' not in channel_url:
          if channel_url.endswith('/'):
             target_url = channel_url + 'live'
          else:
