@@ -28,8 +28,40 @@ def get_channel_live_url(channel_url):
     """
     print(f"Checking for live stream on: {channel_url}")
     
-    # 1. Try yt-dlp FIRST (Most robust for YouTube)
-    print("Attempting to fetch with yt-dlp...")
+    print(f"Checking for live stream on: {channel_url}")
+    
+    # 1. Try Streamlink FIRST (Often better for simple live checks without blocking)
+    print("Attempting to fetch with Streamlink first...")
+    
+    # Ensure checking /live if it's a channel
+    target_url = channel_url
+    if 'youtube.com' in channel_url and not channel_url.endswith('/live') and 'watch?v=' not in channel_url:
+         if channel_url.endswith('/'):
+            target_url = channel_url + 'live'
+         else:
+            target_url = channel_url + '/live'
+
+    try:
+        streams = streamlink.streams(target_url)
+        if streams:
+            if 'best' in streams:
+                print("Live stream found via Streamlink!")
+                # For streamlink, we might get a raw hls url. 
+                # Returing the original URL might be safer if we want to pipe it, 
+                # BUT if we want to confirm it is live, getting the stream url is proof.
+                # We return the original target_url or channel_url to indicate "Yes it is live".
+                # But wait, the main loop expects a URL to stream. 
+                # If we return the HLS URL, yt-dlp might fail to pipe it if it expires.
+                # Let's return the channel_url (or target_url) so stream_facebook can handle it.
+                return target_url
+    except Exception as e:
+        print(f"Streamlink error: {e}")
+
+    # 2. Try yt-dlp SECOND (Fallback or for detailed metadata)
+    print("Streamlink failed or found no stream. Attempting yt-dlp...")
+    ydl_opts = {
+    
+    # Ensure checking /live if it's a channel
     ydl_opts = {
         'format': 'best',
         'quiet': True,
@@ -65,30 +97,6 @@ def get_channel_live_url(channel_url):
                      return info.get('url')
         except Exception as e:
             print(f"yt-dlp error: {e}")
-
-    # 2. Fallback to Streamlink (if yt-dlp failed)
-    print("yt-dlp failed or found no live stream. Trying Streamlink fallback...")
-    
-    # Ensure checking /live if it's a channel
-    target_url = channel_url
-    if 'youtube.com' in channel_url and not channel_url.endswith('/live') and 'watch?v=' not in channel_url:
-         if channel_url.endswith('/'):
-            target_url = channel_url + 'live'
-         else:
-            target_url = channel_url + '/live'
-
-    try:
-        streams = streamlink.streams(target_url)
-        if streams:
-            if 'best' in streams:
-                print("Live stream found via Streamlink!")
-                return streams['best'].url
-            elif 'mobile_worst' in streams:
-                return streams['mobile_worst'].url
-            else:
-                return list(streams.values())[0].url
-    except Exception as e:
-        print(f"Streamlink error: {e}")
 
     print("No live stream detected by any method.")
     return None
