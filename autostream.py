@@ -1,8 +1,11 @@
-import json
 import sys
 import os
+# Force UTF-8 for output to handle emojis
+os.environ['PYTHONUTF8'] = '1'
+import json
 import streamlink
 import stream_facebook
+from yt_dlp import YoutubeDL
 
 def load_config():
     """Loads configuration from config.json"""
@@ -20,54 +23,66 @@ def load_config():
 
 def get_channel_live_url(channel_url):
     """
-    Checks if a channel is live using Streamlink and returns the DIRECT video URL.
-    Returns None if the channel is not live.
-    Using Streamlink is usually faster than yt-dlp for live checks.
+    Checks if a channel is live using yt-dlp (Primary) and Streamlink (Fallback).
+    Returns the DIRECT video URL.
     """
     print(f"Checking for live stream on: {channel_url}")
     
-    # Ensure we are checking the /live endpoint if generic channel URL is provided
-    # Streamlink handles channel URLs well, but explicit /live is safer for "is live now" logic on some platforms
+    # 1. Try yt-dlp FIRST (Most robust for YouTube)
+    print("Attempting to fetch with yt-dlp...")
+    ydl_opts = {
+        'format': 'best',
+        'quiet': True,
+        'ignoreerrors': True,
+        'no_warnings': True,
+        # 'cookiefile': 'cookies.txt', # useful if ever provided
+    }
+    
+    with YoutubeDL(ydl_opts) as ydl:
+        try:
+            info = ydl.extract_info(channel_url, download=False)
+            if info:
+                 # Check 'is_live' or if it's a direct video (protocol check)
+                 if info.get('is_live') or (info.get('was_live') == False and 'live_url' in info):
+                      print(f"Live stream detected via yt-dlp: {info.get('title', 'Unknown')}")
+                      return info.get('url')
+                 elif info.get('protocol') in ['m3u8', 'm3u8_native']:
+                      print("Direct HLS stream found via yt-dlp!")
+                      return info.get('url')
+                 
+                 # Logic for specific video IDs that are live
+                 if 'watch?v=' in channel_url and info.get('url'):
+                     print("Video URL found via yt-dlp.")
+                     return info.get('url')
+        except Exception as e:
+            print(f"yt-dlp error: {e}")
+
+    # 2. Fallback to Streamlink (if yt-dlp failed)
+    print("yt-dlp failed or found no live stream. Trying Streamlink fallback...")
+    
+    # Ensure checking /live if it's a channel
     target_url = channel_url
-    # Only append /live if it's a channel URL (not a specific video)
     if 'youtube.com' in channel_url and not channel_url.endswith('/live') and 'watch?v=' not in channel_url:
          if channel_url.endswith('/'):
             target_url = channel_url + 'live'
          else:
             target_url = channel_url + '/live'
 
-    # First attempt: Check the specific /live endpoint (most reliable for "current" stream)
     try:
         streams = streamlink.streams(target_url)
-    except streamlink.PluginError as e:
-        print(f"Plugin error on /live url: {e}")
-        streams = None
+        if streams:
+            if 'best' in streams:
+                print("Live stream found via Streamlink!")
+                return streams['best'].url
+            elif 'mobile_worst' in streams:
+                return streams['mobile_worst'].url
+            else:
+                return list(streams.values())[0].url
     except Exception as e:
-        print(f"Error checking /live url: {e}")
-        streams = None
+        print(f"Streamlink error: {e}")
 
-    # Second attempt: If /live failed, try the raw channel URL
-    if not streams and target_url != channel_url:
-        print(f"Retrying with raw channel URL: {channel_url}")
-        try:
-             streams = streamlink.streams(channel_url)
-        except Exception as e:
-             print(f"Error checking raw url: {e}")
-             streams = None
-
-    if not streams:
-        print("Channel is not currently live (No streams found).")
-        return None
-    
-    # Get the 'best' quality stream (usually 1080p or 720p)
-    if 'best' in streams:
-        print("Live stream found!")
-        return streams['best'].url
-    elif 'mobile_worst' in streams: # Fallback
-            return streams['mobile_worst'].url
-    else:
-        # Return first available if 'best' missing
-        return list(streams.values())[0].url
+    print("No live stream detected by any method.")
+    return None
 
 def main():
     config = load_config()
@@ -82,18 +97,42 @@ def main():
         sys.exit(1)
     
     # Check if channel is live
-    # This now returns the DIRECT HLS URL (m3u8), not the YouTube Page URL
-    direct_stream_url = get_channel_live_url(channel_url)
+    # We use get_channel_live_url to CONFIRM it is live.
+    # But for the actual stream, we pass the original URL to stream_facebook so it can pipe it.
     
-    if direct_stream_url:
-        print(f"Direct Stream URL obtained.")
+    live_status_url = get_channel_live_url(channel_url)
+    
+    if live_status_url:
+        print(f"Live Status Confirmed.")
         print("Starting restream to Facebook...")
         
-        # We pass the direct URL. We need to tell stream_facebook it's a direct URL.
-        # But stream_facebook currently expects a YouTube URL to extract. 
-        # We will update stream_facebook to detect if it's already a direct link or simple call the stream function.
+        # Determine which URL to pass. 
+        # If 'live_status_url' is a direct link (m3u8), we COULD pass it, but piping the youtube URL is safer/more robust.
+        # However, get_channel_live_url returns the direct link or the watch link.
+        # If the user provided a specific watch Link, we use that.
+        # IF the user provided a Channel Link, we should ideally use the WATCH Link of the current live.
         
-        stream_facebook.stream_to_facebook(direct_stream_url, fb_key)
+        url_to_stream = channel_url
+        
+        # If it's a generic channel URL, 'channel_url' might not be the specific video.
+        # Ideally, `get_channel_live_url` should return the WATCH URL if it found one via yt-dlp.
+        # Let's assume if it returns a 'http' link (m3u8) we might have to use that or fallback to channel url with /live.
+        # Actually, piping 'channel_url/live' works with yt-dlp too!
+        
+        if 'watch?v=' not in channel_url and 'youtube.com' in channel_url:
+             # It's a channel URL. yt-dlp -o - "channel/live" usually works.
+             if not channel_url.endswith('/live'):
+                 if channel_url.endswith('/'):
+                    url_to_stream = channel_url + 'live'
+                 else:
+                    url_to_stream = channel_url + '/live'
+        
+        # If get_channel_live_url returned a specific watch url (from yt-dlp check), use that
+        if 'watch?v=' in live_status_url and 'http' in live_status_url:
+             url_to_stream = live_status_url
+             
+        print(f"Streaming from: {url_to_stream}")
+        stream_facebook.stream_to_facebook(url_to_stream, fb_key)
     else:
         print("No live stream detected. Exiting.")
         sys.exit(0)
