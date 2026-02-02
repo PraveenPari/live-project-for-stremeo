@@ -35,13 +35,7 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
 
-    - name: Create Config and Run Auto Streamer
-      env:
-        YOUTUBE_CHANNEL: ${{ secrets.YOUTUBE_CHANNEL_URL }}
-        FB_STREAM_KEY: ${{ secrets.FB_STREAM_KEY }}
+    - name: Run Auto Streamer
       run: |
-        # Create config.json from secrets
-        echo "{ \"youtube_channel_url\": \"$YOUTUBE_CHANNEL\", \"facebook_stream_key\": \"$FB_STREAM_KEY\" }" > config.json
-        
         python autostream.py
 
