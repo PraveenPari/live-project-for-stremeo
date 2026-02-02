@@ -36,9 +36,10 @@ jobs:
     - name: Setup Cookies (Optional)
       env:
         COOKIES: ${{ secrets.YOUTUBE_COOKIES }}
-      if: secrets.YOUTUBE_COOKIES != ''
       run: |
-        echo "$COOKIES" > cookies.txt
+        if [ -n "$COOKIES" ]; then
+          echo "$COOKIES" > cookies.txt
+        fi
 
     - name: Run Auto Streamer
       run: |

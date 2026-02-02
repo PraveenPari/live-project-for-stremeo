@@ -25,8 +25,14 @@ def stream_to_facebook(video_url, stream_key):
         '--no-warnings',
         '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
         '-f', 'best',       # Best quality
-        video_url
     ]
+    
+    import os
+    if os.path.exists('cookies.txt'):
+        print("Using cookies.txt for stream pipeline...")
+        yt_dlp_cmd.extend(['--cookies', 'cookies.txt'])
+        
+    yt_dlp_cmd.append(video_url)
 
     # 2. FFmpeg Command (Consumer)
     # Use 'ffmpeg' directly since static_ffmpeg.add_paths() adds it to os.environ['PATH']
