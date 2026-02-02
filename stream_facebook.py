@@ -55,7 +55,8 @@ def stream_to_facebook(video_url, stream_key):
         '-bufsize', '4500k', # 1-second buffer
         
         '-pix_fmt', 'yuv420p',
-        '-g', '60', # 2 second GOP
+        '-r', '30', # Force 30 fps
+        '-g', '60', # 2 second GOP (Standard for FB at 30fps)
         
         '-c:a', 'aac',
         '-b:a', '128k',
