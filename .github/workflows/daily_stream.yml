@@ -39,7 +39,7 @@ jobs:
         COOKIES: ${{ secrets.YOUTUBE_COOKIES }}
       run: |
         if [ -n "$COOKIES" ]; then
-          echo "$COOKIES" > cookies.txt
+          printf "%s" "$COOKIES" > cookies.txt
         fi
 
     - name: Run Auto Streamer
