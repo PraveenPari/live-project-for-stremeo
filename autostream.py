@@ -22,9 +22,14 @@ def is_video_available(url):
 
         # Use cookies if available
         if os.path.exists('cookies.txt'):
+            file_size = os.path.getsize('cookies.txt')
+            print(f"  Using cookies.txt ({file_size} bytes)")
             cmd.extend(['--cookies', 'cookies.txt'])
+        else:
+            print("  WARNING: No cookies.txt found!")
 
         cmd.append(url)
+        print(f"  Running: {' '.join(cmd[:5])}...")
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
 
         if result.returncode == 0:
@@ -38,7 +43,7 @@ def is_video_available(url):
             print("Video is available and playable!")
             return True
         else:
-            print(f"  yt-dlp error: {result.stderr[:500]}")
+            print(f"  yt-dlp error (full):\n{result.stderr}")
             return False
 
     except subprocess.TimeoutExpired:

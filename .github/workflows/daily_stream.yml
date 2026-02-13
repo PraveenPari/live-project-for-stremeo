@@ -38,13 +38,20 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y ffmpeg
         python -m pip install --upgrade pip
+        pip install --upgrade yt-dlp
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-    - name: Setup Cookies (Optional)
+        echo "yt-dlp version:" && yt-dlp --version
+        echo "node version:" && node --version
+
+    - name: Setup Cookies
       env:
         COOKIES: ${{ secrets.YOUTUBE_COOKIES }}
       run: |
         if [ -n "$COOKIES" ]; then
           printf "%s" "$COOKIES" > cookies.txt
+          echo "cookies.txt created ($(wc -l < cookies.txt) lines, $(wc -c < cookies.txt) bytes)"
+        else
+          echo "WARNING: No YOUTUBE_COOKIES secret set!"
         fi
 
     - name: Run Auto Streamer
