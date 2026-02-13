@@ -20,7 +20,7 @@ def stream_to_facebook(video_url, stream_key):
     # Use python -m yt_dlp to ensure we find the installed module
     yt_dlp_cmd = [
         sys.executable, '-m', 'yt_dlp',
-        '--js-runtimes', 'nodejs',
+        '--js-runtimes', 'node',
         '-o', '-',          # Output to stdout
         '--quiet',          # Suppress excessive logs
         '--no-warnings',

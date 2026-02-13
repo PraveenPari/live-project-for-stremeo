@@ -10,7 +10,7 @@ def is_video_available(url):
     """Check if YouTube video is available and playable (live or regular)"""
     print(f"Checking video availability: {url}")
     try:
-        cmd = ['yt-dlp', '--js-runtimes', 'nodejs', '--dump-json', '--no-download', url]
+        cmd = ['yt-dlp', '--js-runtimes', 'node', '--dump-json', '--no-download', url]
 
         # Use cookies if available
         if os.path.exists('cookies.txt'):
