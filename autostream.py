@@ -1,146 +1,184 @@
-import sys
+import subprocess
 import os
-# Force UTF-8 for output to handle emojis
-os.environ['PYTHONUTF8'] = '1'
-import json
-import streamlink
-import stream_facebook
-from yt_dlp import YoutubeDL
+import time
+import requests
+from datetime import datetime
 
-def load_config():
-    """Loads configuration from config.json"""
-    config_path = 'config.json'
-    if not os.path.exists(config_path):
-        print(f"Error: {config_path} not found.")
-        return None
-    
+def check_streamlink(url):
+    """Check if stream is live using Streamlink"""
     try:
-        with open(config_path, 'r') as f:
-            return json.load(f)
+        result = subprocess.run(['streamlink', url, '--stream-url'], 
+                              capture_output=True, text=True, timeout=30)
+        return result.returncode == 0
     except Exception as e:
-        print(f"Error reading config.json: {e}")
-        return None
+        print(f"Streamlink check failed: {e}")
+        return False
 
-def get_channel_live_url(channel_url):
-    """
-    Checks if a channel is live using yt-dlp (Primary) and Streamlink (Fallback).
-    Returns the DIRECT video URL.
-    """
-    print(f"Checking for live stream on: {channel_url}")
+def check_ytdlp(url):
+    """Check if stream is live using yt-dlp"""
+    try:
+        result = subprocess.run(['yt-dlp', '--cookies', 'cookies.txt', '--dump-json', url], 
+                              capture_output=True, text=True, timeout=30)
+        if result.returncode == 0:
+            import json
+            data = json.loads(result.stdout)
+            return data.get('is_live', False)
+    except Exception as e:
+        print(f"yt-dlp check failed: {e}")
+    return False
+
+def is_stream_live(url):
+    """Check if YouTube stream is live"""
+    print(f"Checking for live stream on: {url}")
     
-    # 1. Try Streamlink FIRST
+    # Try Streamlink first
     print("Attempting to fetch with Streamlink first...")
-    
-    # Ensure checking /live if it's a channel
-    target_url = channel_url
-    if 'youtube.com' in channel_url and not channel_url.endswith('/live') and 'watch?v=' not in channel_url:
-         if channel_url.endswith('/'):
-            target_url = channel_url + 'live'
-         else:
-            target_url = channel_url + '/live'
-
-    try:
-        streams = streamlink.streams(target_url)
-        if streams:
-            if 'best' in streams:
-                print("Live stream found via Streamlink!")
-                return target_url
-    except Exception as e:
-        print(f"Streamlink error: {e}")
-
-    # 2. Try yt-dlp SECOND (Fallback)
+    if check_streamlink(url):
+        return True
     print("Streamlink failed or found no stream. Attempting yt-dlp...")
-    ydl_opts = {
-        'format': 'best',
-        'quiet': True,
-        'ignoreerrors': True,
-        'no_warnings': True,
-        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
-        'referer': 'https://www.youtube.com/',
-        'http_headers': {
-            'Accept-Language': 'en-US,en;q=0.9',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7'
-        }
-    }
     
-    if os.path.exists('cookies.txt'):
-        print("Using cookies.txt for authentication...")
-        ydl_opts['cookiefile'] = 'cookies.txt'
-    
-    with YoutubeDL(ydl_opts) as ydl:
-        try:
-            info = ydl.extract_info(channel_url, download=False)
-            if info:
-                 # Check 'is_live' or if it's a direct video (protocol check)
-                 if info.get('is_live') or (info.get('was_live') == False and 'live_url' in info):
-                      print(f"Live stream detected via yt-dlp: {info.get('title', 'Unknown')}")
-                      return info.get('url')
-                 elif info.get('protocol') in ['m3u8', 'm3u8_native']:
-                      print("Direct HLS stream found via yt-dlp!")
-                      return info.get('url')
-                 
-                 # Logic for specific video IDs that are live
-                 if 'watch?v=' in channel_url and info.get('url'):
-                     print("Video URL found via yt-dlp.")
-                     return info.get('url')
-        except Exception as e:
-            print(f"yt-dlp error: {e}")
+    # Fallback to yt-dlp
+    return check_ytdlp(url)
 
-    print("No live stream detected by any method.")
-    return None
+def download_stream(url, output_path='stream.mp4'):
+    """Download live stream using yt-dlp with cookies"""
+    try:
+        # Check if cookies.txt exists
+        if os.path.exists('cookies.txt'):
+            print("Using cookies.txt for authentication...")
+        
+        # First, get available formats
+        result = subprocess.run(['yt-dlp', '--cookies', 'cookies.txt', '-F', url], capture_output=True, text=True, timeout=30)
+        
+        if result.returncode != 0:
+            print(f"Error getting formats: {result.stderr}")
+            return False
+        
+        # Get best format
+        best_format = 'best'
+        
+        # Download the stream
+        print(f"Downloading stream from {url}")
+        result = subprocess.run(['yt-dlp', '--cookies', 'cookies.txt', '-f', best_format, '-o', output_path, url], capture_output=True, text=True)
+        
+        if result.returncode == 0:
+            print(f"Successfully downloaded stream to {output_path}")
+            return True
+        else:
+            print(f"Download failed: {result.stderr}")
+            return False
+            
+    except Exception as e:
+        print(f"Error downloading stream: {e}")
+        return False
+
+def upload_to_facebook(video_path, page_id, access_token):
+    """Upload video to Facebook"""
+    try:
+        upload_url = f"https://graph.facebook.com/v18.0/{page_id}/videos"
+        
+        with open(video_path, 'rb') as video_file:
+            files = {'file': video_file}
+            data = {
+                'access_token': access_token,
+                'description': f'Live stream recording - {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}'
+            }
+            
+            print(f"Uploading to Facebook page {page_id}...")
+            response = requests.post(upload_url, files=files, data=data)
+            
+            if response.status_code == 200:
+                print(f"Successfully uploaded to Facebook: {response.json()}")
+                return True
+            else:
+                print(f"Facebook upload failed: {response.text}")
+                return False
+                
+    except Exception as e:
+        print(f"Error uploading to Facebook: {e}")
+        return False
+
+def upload_to_instagram(video_path, ig_user_id, access_token):
+    """Upload video to Instagram"""
+    try:
+        # Instagram requires a two-step process
+        # Step 1: Create media container
+        create_url = f"https://graph.facebook.com/v18.0/{ig_user_id}/media"
+        create_data = {
+            'media_type': 'VIDEO',
+            'video_url': video_path,  # This should be a public URL
+            'caption': f'Live stream recording - {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}',
+            'access_token': access_token
+        }
+        
+        print(f"Creating Instagram media container...")
+        response = requests.post(create_url, data=create_data)
+        
+        if response.status_code != 200:
+            print(f"Failed to create media container: {response.text}")
+            return False
+            
+        container_id = response.json().get('id')
+        
+        # Step 2: Publish media
+        publish_url = f"https://graph.facebook.com/v18.0/{ig_user_id}/media_publish"
+        publish_data = {
+            'creation_id': container_id,
+            'access_token': access_token
+        }
+        
+        print(f"Publishing to Instagram...")
+        response = requests.post(publish_url, data=publish_data)
+        
+        if response.status_code == 200:
+            print(f"Successfully uploaded to Instagram: {response.json()}")
+            return True
+        else:
+            print(f"Instagram publish failed: {response.text}")
+            return False
+            
+    except Exception as e:
+        print(f"Error uploading to Instagram: {e}")
+        return False
 
 def main():
-    config = load_config()
-    if not config:
-        sys.exit(1)
-
-    channel_url = config.get('youtube_channel_url')
-    fb_key = config.get('facebook_stream_key')
-
-    if not channel_url or not fb_key:
-        print("Error: Missing 'youtube_channel_url' or 'facebook_stream_key' in config.json")
-        sys.exit(1)
+    # Configuration
+    youtube_url = os.getenv('YOUTUBE_URL', 'https://www.youtube.com/watch?v=UVZtLRtKKdM')
+    platform = os.getenv('INPUT_PLATFORM', 'facebook')
     
-    # Check if channel is live
-    # We use get_channel_live_url to CONFIRM it is live.
-    # But for the actual stream, we pass the original URL to stream_facebook so it can pipe it.
+    # Facebook credentials
+    fb_page_id = os.getenv('FB_PAGE_ID')
+    fb_access_token = os.getenv('FB_ACCESS_TOKEN')
     
-    live_status_url = get_channel_live_url(channel_url)
+    # Instagram credentials
+    ig_user_id = os.getenv('IG_USER_ID')
+    ig_access_token = os.getenv('IG_ACCESS_TOKEN')
     
-    if live_status_url:
-        print(f"Live Status Confirmed.")
-        print("Starting restream to Facebook...")
+    print(f"Starting stream check at {datetime.now()}")
+    print(f"Target platform: {platform}")
+    
+    # Check if stream is live
+    if is_stream_live(youtube_url):
+        print("Live stream detected!")
         
-        # Determine which URL to pass. 
-        # If 'live_status_url' is a direct link (m3u8), we COULD pass it, but piping the youtube URL is safer/more robust.
-        # However, get_channel_live_url returns the direct link or the watch link.
-        # If the user provided a specific watch Link, we use that.
-        # IF the user provided a Channel Link, we should ideally use the WATCH Link of the current live.
-        
-        url_to_stream = channel_url
-        
-        # If it's a generic channel URL, 'channel_url' might not be the specific video.
-        # Ideally, `get_channel_live_url` should return the WATCH URL if it found one via yt-dlp.
-        # Let's assume if it returns a 'http' link (m3u8) we might have to use that or fallback to channel url with /live.
-        # Actually, piping 'channel_url/live' works with yt-dlp too!
-        
-        if 'watch?v=' not in channel_url and 'youtube.com' in channel_url:
-             # It's a channel URL. yt-dlp -o - "channel/live" usually works.
-             if not channel_url.endswith('/live'):
-                 if channel_url.endswith('/'):
-                    url_to_stream = channel_url + 'live'
-                 else:
-                    url_to_stream = channel_url + '/live'
-        
-        # If get_channel_live_url returned a specific watch url (from yt-dlp check), use that
-        if 'watch?v=' in live_status_url and 'http' in live_status_url:
-             url_to_stream = live_status_url
-             
-        print(f"Streaming from: {url_to_stream}")
-        stream_facebook.stream_to_facebook(url_to_stream, fb_key)
+        # Download the stream
+        video_path = 'stream.mp4'
+        if download_stream(youtube_url, video_path):
+            # Upload to selected platform
+            if platform == 'facebook' and fb_page_id and fb_access_token:
+                upload_to_facebook(video_path, fb_page_id, fb_access_token)
+            elif platform == 'instagram' and ig_user_id and ig_access_token:
+                upload_to_instagram(video_path, ig_user_id, ig_access_token)
+            else:
+                print(f"Missing credentials for {platform}")
+            
+            # Cleanup
+            if os.path.exists(video_path):
+                os.remove(video_path)
+        else:
+            print("Failed to download stream")
     else:
         print("No live stream detected. Exiting.")
-        sys.exit(0)
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
