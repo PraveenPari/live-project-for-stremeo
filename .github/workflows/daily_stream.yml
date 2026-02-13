@@ -28,6 +28,11 @@ jobs:
       with:
         python-version: '3.10'
 
+    - name: Set up Node.js (required by yt-dlp)
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
     - name: Install dependencies
       run: |
         sudo apt-get update
