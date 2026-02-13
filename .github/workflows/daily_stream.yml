@@ -43,5 +43,8 @@ jobs:
         fi
 
     - name: Run Auto Streamer
+      env:
+        YOUTUBE_URL: ${{ secrets.YOUTUBE_URL }}
+        FB_STREAM_KEY: ${{ secrets.FB_STREAM_KEY }}
       run: |
         python autostream.py

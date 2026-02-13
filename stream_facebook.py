@@ -48,40 +48,32 @@ def stream_to_facebook(video_url, stream_key):
     ffmpeg_cmd = [
         ffmpeg_path,
         '-y',               # Overwrite output
-        '-re',              # Read input at native frame rate (CRITICAL for piping live content correctly if not handled by source)
-                            # However, for live piping, -re is sometimes risky. 
-                            # But since we are piping FROM a downloader that downloads as fast as possible, 
-                            # we usually want ffmpeg to pace itself or the downloader to pace.
-                            # yt-dlp downloads live streams in real-time usually.
-                            # Let's try WITHOUT -re first because input is a stream.
-                            # Actually, with piping, '-re' is safer if the source is a file, but for live source it might be redundant.
-                            # Let's keep input options simple.
+        '-re',              # Read input at native frame rate
+        '-thread_queue_size', '4096',
         
         # Input: Read from Pipe
         '-i', 'pipe:0',
         
-        # Facebook Settings (1080p, 30fps, CBR 4500k)
-        '-vf', "scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2",
+        # Facebook Settings (720p Stability Mode)
+        '-vf', "scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2",
         
         '-c:v', 'libx264',
-        '-preset', 'ultrafast',
+        '-preset', 'veryfast',
         '-tune', 'zerolatency',
         
-        # Latency & Stability
-        '-fflags', 'nobuffer',
-        '-flags', 'low_delay',
-        '-strict', 'experimental',
+        '-max_muxing_queue_size', '1024',
+        '-fflags', '+genpts+discardcorrupt+nobuffer',
         
         # Audio
         '-c:a', 'aac',
         '-b:a', '128k',
         '-ar', '44100',
+        '-af', 'aresample=async=1000',
         
-        # Video Bitrate (CBR)
-        '-b:v', '4500k',
-        '-minrate', '4500k',
-        '-maxrate', '4500k',
-        '-bufsize', '4500k',
+        # Video Bitrate (Lowered for stability)
+        '-b:v', '2500k',
+        '-maxrate', '2800k',
+        '-bufsize', '5000k',
         
         '-pix_fmt', 'yuv420p',
         '-r', '30',

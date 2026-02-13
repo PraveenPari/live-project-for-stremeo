@@ -1,184 +1,102 @@
 import subprocess
 import os
+import sys
+import json
 import time
-import requests
 from datetime import datetime
 
-def check_streamlink(url):
-    """Check if stream is live using Streamlink"""
-    try:
-        result = subprocess.run(['streamlink', url, '--stream-url'], 
-                              capture_output=True, text=True, timeout=30)
-        return result.returncode == 0
-    except Exception as e:
-        print(f"Streamlink check failed: {e}")
-        return False
 
-def check_ytdlp(url):
-    """Check if stream is live using yt-dlp"""
+def is_video_available(url):
+    """Check if YouTube video is available and playable (live or regular)"""
+    print(f"Checking video availability: {url}")
     try:
-        result = subprocess.run(['yt-dlp', '--cookies', 'cookies.txt', '--dump-json', url], 
-                              capture_output=True, text=True, timeout=30)
-        if result.returncode == 0:
-            import json
-            data = json.loads(result.stdout)
-            return data.get('is_live', False)
-    except Exception as e:
-        print(f"yt-dlp check failed: {e}")
-    return False
+        cmd = ['yt-dlp', '--dump-json', '--no-download', url]
 
-def is_stream_live(url):
-    """Check if YouTube stream is live"""
-    print(f"Checking for live stream on: {url}")
-    
-    # Try Streamlink first
-    print("Attempting to fetch with Streamlink first...")
-    if check_streamlink(url):
-        return True
-    print("Streamlink failed or found no stream. Attempting yt-dlp...")
-    
-    # Fallback to yt-dlp
-    return check_ytdlp(url)
-
-def download_stream(url, output_path='stream.mp4'):
-    """Download live stream using yt-dlp with cookies"""
-    try:
-        # Check if cookies.txt exists
+        # Use cookies if available
         if os.path.exists('cookies.txt'):
-            print("Using cookies.txt for authentication...")
-        
-        # First, get available formats
-        result = subprocess.run(['yt-dlp', '--cookies', 'cookies.txt', '-F', url], capture_output=True, text=True, timeout=30)
-        
-        if result.returncode != 0:
-            print(f"Error getting formats: {result.stderr}")
-            return False
-        
-        # Get best format
-        best_format = 'best'
-        
-        # Download the stream
-        print(f"Downloading stream from {url}")
-        result = subprocess.run(['yt-dlp', '--cookies', 'cookies.txt', '-f', best_format, '-o', output_path, url], capture_output=True, text=True)
-        
+            cmd.insert(1, '--cookies')
+            cmd.insert(2, 'cookies.txt')
+
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+
         if result.returncode == 0:
-            print(f"Successfully downloaded stream to {output_path}")
+            data = json.loads(result.stdout)
+            title = data.get('title', 'Unknown')
+            is_live = data.get('is_live', False)
+            duration = data.get('duration', 0)
+            print(f"  Title: {title}")
+            print(f"  Is Live: {is_live}")
+            print(f"  Duration: {duration}s")
+            print("Video is available and playable!")
             return True
         else:
-            print(f"Download failed: {result.stderr}")
+            print(f"  yt-dlp error: {result.stderr[:500]}")
             return False
-            
+
+    except subprocess.TimeoutExpired:
+        print("  Video check timed out after 60s")
+        return False
     except Exception as e:
-        print(f"Error downloading stream: {e}")
+        print(f"  Video check failed: {e}")
         return False
 
-def upload_to_facebook(video_path, page_id, access_token):
-    """Upload video to Facebook"""
-    try:
-        upload_url = f"https://graph.facebook.com/v18.0/{page_id}/videos"
-        
-        with open(video_path, 'rb') as video_file:
-            files = {'file': video_file}
-            data = {
-                'access_token': access_token,
-                'description': f'Live stream recording - {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}'
-            }
-            
-            print(f"Uploading to Facebook page {page_id}...")
-            response = requests.post(upload_url, files=files, data=data)
-            
-            if response.status_code == 200:
-                print(f"Successfully uploaded to Facebook: {response.json()}")
-                return True
-            else:
-                print(f"Facebook upload failed: {response.text}")
-                return False
-                
-    except Exception as e:
-        print(f"Error uploading to Facebook: {e}")
-        return False
 
-def upload_to_instagram(video_path, ig_user_id, access_token):
-    """Upload video to Instagram"""
-    try:
-        # Instagram requires a two-step process
-        # Step 1: Create media container
-        create_url = f"https://graph.facebook.com/v18.0/{ig_user_id}/media"
-        create_data = {
-            'media_type': 'VIDEO',
-            'video_url': video_path,  # This should be a public URL
-            'caption': f'Live stream recording - {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}',
-            'access_token': access_token
-        }
-        
-        print(f"Creating Instagram media container...")
-        response = requests.post(create_url, data=create_data)
-        
-        if response.status_code != 200:
-            print(f"Failed to create media container: {response.text}")
-            return False
-            
-        container_id = response.json().get('id')
-        
-        # Step 2: Publish media
-        publish_url = f"https://graph.facebook.com/v18.0/{ig_user_id}/media_publish"
-        publish_data = {
-            'creation_id': container_id,
-            'access_token': access_token
-        }
-        
-        print(f"Publishing to Instagram...")
-        response = requests.post(publish_url, data=publish_data)
-        
-        if response.status_code == 200:
-            print(f"Successfully uploaded to Instagram: {response.json()}")
-            return True
-        else:
-            print(f"Instagram publish failed: {response.text}")
-            return False
-            
-    except Exception as e:
-        print(f"Error uploading to Instagram: {e}")
-        return False
+def load_config():
+    """Load configuration from config.json with env var overrides"""
+    config = {}
+
+    # Load from config.json if it exists
+    config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.json')
+    if os.path.exists(config_path):
+        with open(config_path, 'r') as f:
+            config = json.load(f)
+        print(f"Loaded config from {config_path}")
+
+    # Environment variables override config.json
+    youtube_url = os.getenv('YOUTUBE_URL', config.get('youtube_channel_url', ''))
+    stream_key = os.getenv('FB_STREAM_KEY', config.get('facebook_stream_key', ''))
+
+    return youtube_url, stream_key
+
 
 def main():
-    # Configuration
-    youtube_url = os.getenv('YOUTUBE_URL', 'https://www.youtube.com/watch?v=UVZtLRtKKdM')
-    platform = os.getenv('INPUT_PLATFORM', 'facebook')
-    
-    # Facebook credentials
-    fb_page_id = os.getenv('FB_PAGE_ID')
-    fb_access_token = os.getenv('FB_ACCESS_TOKEN')
-    
-    # Instagram credentials
-    ig_user_id = os.getenv('IG_USER_ID')
-    ig_access_token = os.getenv('IG_ACCESS_TOKEN')
-    
     print(f"Starting stream check at {datetime.now()}")
-    print(f"Target platform: {platform}")
-    
-    # Check if stream is live
-    if is_stream_live(youtube_url):
-        print("Live stream detected!")
-        
-        # Download the stream
-        video_path = 'stream.mp4'
-        if download_stream(youtube_url, video_path):
-            # Upload to selected platform
-            if platform == 'facebook' and fb_page_id and fb_access_token:
-                upload_to_facebook(video_path, fb_page_id, fb_access_token)
-            elif platform == 'instagram' and ig_user_id and ig_access_token:
-                upload_to_instagram(video_path, ig_user_id, ig_access_token)
-            else:
-                print(f"Missing credentials for {platform}")
-            
-            # Cleanup
-            if os.path.exists(video_path):
-                os.remove(video_path)
+
+    youtube_url, stream_key = load_config()
+
+    if not youtube_url:
+        print("ERROR: No YouTube URL configured. Set YOUTUBE_URL env var or update config.json")
+        sys.exit(1)
+
+    if not stream_key:
+        print("ERROR: No Facebook stream key configured. Set FB_STREAM_KEY env var or update config.json")
+        sys.exit(1)
+
+    print(f"YouTube URL: {youtube_url}")
+    print(f"Stream Key: {stream_key[:30]}..." if len(stream_key) > 30 else f"Stream Key: {stream_key}")
+
+    # Check if the video is available
+    if is_video_available(youtube_url):
+        print("\nStarting stream to Facebook...")
+
+        # Call stream_facebook.py to pipe yt-dlp -> ffmpeg -> Facebook
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        stream_script = os.path.join(script_dir, 'stream_facebook.py')
+
+        result = subprocess.run(
+            [sys.executable, stream_script, '--url', youtube_url, '--key', stream_key],
+            cwd=script_dir
+        )
+
+        if result.returncode == 0:
+            print("Stream completed successfully!")
         else:
-            print("Failed to download stream")
+            print(f"Stream failed with exit code: {result.returncode}")
+            sys.exit(1)
     else:
-        print("No live stream detected. Exiting.")
+        print("Video is not available or not playable. Exiting.")
+        sys.exit(1)
+
 
 if __name__ == '__main__':
     main()
