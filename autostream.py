@@ -52,9 +52,9 @@ def load_config():
             config = json.load(f)
         print(f"Loaded config from {config_path}")
 
-    # Environment variables override config.json
-    youtube_url = os.getenv('YOUTUBE_URL', config.get('youtube_channel_url', ''))
-    stream_key = os.getenv('FB_STREAM_KEY', config.get('facebook_stream_key', ''))
+    # Environment variables override config.json (empty strings fall back to config)
+    youtube_url = os.getenv('YOUTUBE_URL') or config.get('youtube_channel_url', '')
+    stream_key = os.getenv('FB_STREAM_KEY') or config.get('facebook_stream_key', '')
 
     return youtube_url, stream_key
 
