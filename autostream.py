@@ -10,13 +10,21 @@ def is_video_available(url):
     """Check if YouTube video is available and playable (live or regular)"""
     print(f"Checking video availability: {url}")
     try:
-        cmd = ['yt-dlp', '--js-runtimes', 'node', '--dump-json', '--no-download', url]
+        cmd = [
+            'yt-dlp',
+            '--js-runtimes', 'node',
+            '--dump-json',
+            '--no-download',
+            '--extractor-args', 'youtube:player_client=android,web',
+            '--user-agent', 'Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
+            '--no-check-certificates',
+        ]
 
         # Use cookies if available
         if os.path.exists('cookies.txt'):
-            cmd.insert(1, '--cookies')
-            cmd.insert(2, 'cookies.txt')
+            cmd.extend(['--cookies', 'cookies.txt'])
 
+        cmd.append(url)
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
 
         if result.returncode == 0:
