@@ -45,13 +45,20 @@ jobs:
 
     - name: Setup Cookies
       env:
-        COOKIES: ${{ secrets.YOUTUBE_COOKIES }}
+        COOKIES_B64: ${{ secrets.YOUTUBE_COOKIES_BASE64 }}
+        COOKIES_RAW: ${{ secrets.YOUTUBE_COOKIES }}
       run: |
-        if [ -n "$COOKIES" ]; then
-          printf "%s" "$COOKIES" > cookies.txt
-          echo "cookies.txt created ($(wc -l < cookies.txt) lines, $(wc -c < cookies.txt) bytes)"
+        if [ -n "$COOKIES_B64" ]; then
+          echo "$COOKIES_B64" | base64 -d > cookies.txt
+          echo "cookies.txt from BASE64 ($(wc -l < cookies.txt) lines, $(wc -c < cookies.txt) bytes)"
+        elif [ -n "$COOKIES_RAW" ]; then
+          echo "$COOKIES_RAW" > cookies.txt
+          echo "cookies.txt from RAW ($(wc -l < cookies.txt) lines, $(wc -c < cookies.txt) bytes)"
         else
-          echo "WARNING: No YOUTUBE_COOKIES secret set!"
+          echo "WARNING: No cookies secret set!"
+        fi
+        if [ -f cookies.txt ]; then
+          head -3 cookies.txt
         fi
 
     - name: Run Auto Streamer

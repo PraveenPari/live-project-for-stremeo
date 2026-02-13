@@ -88,8 +88,21 @@ def main():
     print(f"YouTube URL: {youtube_url}")
     print(f"Stream Key: {stream_key[:30]}..." if len(stream_key) > 30 else f"Stream Key: {stream_key}")
 
-    # Check if the video is available
-    if is_video_available(youtube_url):
+    # Check if the video is available (with retries for rate limiting)
+    max_retries = 3
+    retry_delay = 30  # seconds
+    video_ok = False
+
+    for attempt in range(1, max_retries + 1):
+        print(f"\nAttempt {attempt}/{max_retries}...")
+        if is_video_available(youtube_url):
+            video_ok = True
+            break
+        elif attempt < max_retries:
+            print(f"Waiting {retry_delay}s before retry...")
+            time.sleep(retry_delay)
+
+    if video_ok:
         print("\nStarting stream to Facebook...")
 
         # Call stream_facebook.py to pipe yt-dlp -> ffmpeg -> Facebook
@@ -107,7 +120,7 @@ def main():
             print(f"Stream failed with exit code: {result.returncode}")
             sys.exit(1)
     else:
-        print("Video is not available or not playable. Exiting.")
+        print("Video is not available after all retries. Exiting.")
         sys.exit(1)
 
 
