@@ -4,6 +4,18 @@ import subprocess
 import sys
 
 
+FB_RTMP_ENDPOINT = 'rtmps://live-api-s.facebook.com:443/rtmp/'
+
+
+def normalize_stream_key(stream_key):
+    """Accept a bare 'FB-...' token or a full rtmp(s):// URL; return a full URL."""
+    if not stream_key:
+        return stream_key
+    if stream_key.startswith(('rtmp://', 'rtmps://')):
+        return stream_key
+    return FB_RTMP_ENDPOINT + stream_key
+
+
 def mask_stream_key(stream_key):
     """Never print the full RTMP key into logs (CI logs are public)."""
     if not stream_key:
@@ -20,6 +32,7 @@ def stream_to_facebook(video_url, stream_key):
 
     Returns the pipeline's exit code (0 on success, non-zero on failure).
     """
+    stream_key = normalize_stream_key(stream_key)
     print(f"Starting Pipeline Stream for: {video_url}")
 
     # Resolve ffmpeg path: prefer static_ffmpeg bundle, fall back to system ffmpeg
