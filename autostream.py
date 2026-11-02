@@ -47,7 +47,7 @@ def get_video_info(url):
         '--dump-json',
         '--no-download',
         '--no-playlist',
-        '--extractor-args', 'youtube:player_client=android,web',
+        '--extractor-args', 'youtube:player_client=tv_embedded,android,web',
         '--user-agent', 'Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
         '--no-check-certificates',
     ]

@@ -52,7 +52,7 @@ def stream_to_facebook(video_url, stream_key):
         '-o', '-',          # Output to stdout
         '--quiet',          # Suppress excessive logs
         '--no-warnings',
-        '--extractor-args', 'youtube:player_client=android,web',
+        '--extractor-args', 'youtube:player_client=tv_embedded,android,web',
         '--user-agent', 'Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
         '--no-check-certificates',
         '-f', 'best',       # Best quality single A/V format
