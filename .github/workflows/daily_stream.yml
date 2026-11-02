@@ -6,27 +6,30 @@ on:
     - cron: '30 2 * * *'
   workflow_dispatch:
     inputs:
-      platform:
-        description: 'Target Platform'
-        required: true
-        default: 'facebook'
-        type: choice
-        options:
-        - facebook
-        - instagram
+      check_only:
+        description: 'Run preflight checks only — do not start streaming'
+        required: false
+        default: false
+        type: boolean
+      wait_minutes:
+        description: 'If not live yet, keep polling this many minutes'
+        required: false
+        default: '30'
+        type: string
 
 jobs:
   check-and-stream:
     runs-on: ubuntu-latest
-    
+    timeout-minutes: 330
+
     steps:
     - name: Checkout code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
-        python-version: '3.10'
+        python-version: '3.12'
 
     - name: Set up Node.js (required by yt-dlp)
       uses: actions/setup-node@v4
@@ -57,13 +60,17 @@ jobs:
         else
           echo "WARNING: No cookies secret set!"
         fi
-        if [ -f cookies.txt ]; then
-          head -3 cookies.txt
-        fi
 
     - name: Run Auto Streamer
       env:
         YOUTUBE_URL: ${{ secrets.YOUTUBE_URL }}
+        YOUTUBE_CHANNEL_URL: ${{ secrets.YOUTUBE_CHANNEL_URL }}
         FB_STREAM_KEY: ${{ secrets.FB_STREAM_KEY }}
+        CHECK_ONLY: ${{ inputs.check_only || false }}
+        WAIT_MINUTES: ${{ inputs.wait_minutes || '30' }}
       run: |
-        python autostream.py
+        ARGS="--wait-for-live $WAIT_MINUTES"
+        if [ "$CHECK_ONLY" = "true" ]; then
+          ARGS="$ARGS --check-only"
+        fi
+        python autostream.py $ARGS
