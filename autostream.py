@@ -21,14 +21,10 @@ def mask_stream_key(stream_key):
 
 
 def is_channel_url(url):
-    """True for channel handles (/…@name, /channel/, /c/, /user/) or /live aliases —
-    i.e. URLs that are not a single watch?v=/shorts/ video."""
-    if '/live' in url:
-        return True
+    """True only for channel paths (/@name, /channel/, /c/, /user/), optionally
+    ending in /live. youtube.com/live/<id> is a VIDEO URL, not a channel."""
     markers = ('/@', '/channel/', '/c/', '/user/')
-    if any(m in url for m in markers):
-        return True
-    return 'watch?v=' not in url and '/shorts/' not in url and 'youtu.be/' not in url
+    return any(m in url for m in markers)
 
 
 def normalize_url(url):
@@ -73,7 +69,15 @@ def get_video_info(url):
         return None, f"check failed: {e}"
 
     if result.returncode != 0:
-        return None, result.stderr.strip() or "yt-dlp failed with no error output"
+        stderr = result.stderr.strip()
+        # yt-dlp *errors* on scheduled streams ("This live event will begin in
+        # N minutes" / "Premieres in ...") instead of returning is_upcoming —
+        # surface that as an upcoming status so the caller can wait for it.
+        if 'will begin in' in stderr or 'Premieres in' in stderr or 'not currently live' in stderr:
+            status = 'is_upcoming' if 'not currently live' not in stderr else 'not_live'
+            note = stderr.strip().splitlines()[-1]
+            return {'live_status': status, 'title': url, '_note': note}, None
+        return None, stderr or "yt-dlp failed with no error output"
 
     try:
         data = json.loads(result.stdout)
@@ -89,6 +93,8 @@ def describe_video(data):
     print(f"  live_status: {live_status}  (is_live={data.get('is_live', False)})")
     if data.get('release_timestamp'):
         print(f"  Scheduled start: {datetime.fromtimestamp(data['release_timestamp'])}")
+    if data.get('_note'):
+        print(f"  {data['_note']}")
     return live_status
 
 
@@ -121,10 +127,10 @@ def wait_for_live(youtube_url, wait_minutes, poll_seconds):
             status = describe_video(data)
             if status == 'is_live':
                 return data, 'is_live'
-            if status == 'is_upcoming':
+            if status in ('is_upcoming', 'not_live'):
                 if time.time() >= deadline:
-                    return data, 'is_upcoming'
-                print(f"  Stream scheduled but not live yet. Poll again in {poll_seconds}s "
+                    return data, status
+                print(f"  Not live yet. Poll again in {poll_seconds}s "
                       f"(waiting up to {wait_minutes} min)...")
                 time.sleep(poll_seconds)
                 continue
@@ -195,6 +201,13 @@ def main():
         print("\nVideo is not available after all retries. Exiting.")
         sys.exit(1)
 
+    # A scheduled/upcoming stream found: for check-only that IS a pass —
+    # config, cookies and URL are all valid; it just isn't live yet.
+    if args.check_only and status == 'is_upcoming':
+        print("\nCHECK-ONLY: preflight passed — stream is scheduled and upcoming. "
+              "When run without --check-only it will be picked up when it goes live.")
+        sys.exit(0)
+
     if status == 'is_upcoming' or (status == 'not_live' and is_channel_url(youtube_url)):
         if args.wait_for_live > 0:
             print(f"\nNot live yet — polling for up to {args.wait_for_live} minutes...")
@@ -202,11 +215,10 @@ def main():
         else:
             print("\nStream is not live yet and --wait-for-live is 0. Exiting.")
 
-    if status == 'is_live' or (args.stream_any and status in ('was_live', 'not_live', 'is_upcoming')):
-        if status != 'is_live':
-            print(f"\nWARNING: video is '{status}' — streaming anyway (--stream-any)")
-        else:
-            print("\nVideo is LIVE!")
+    if status == 'is_live':
+        print("\nVideo is LIVE!")
+    elif args.stream_any:
+        print(f"\nWARNING: video is '{status}' — streaming anyway (--stream-any)")
     else:
         print(f"\nNot streaming: live_status='{status}' "
               f"(use --stream-any to relay non-live videos).")
