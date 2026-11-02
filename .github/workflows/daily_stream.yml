@@ -16,6 +16,11 @@ on:
         required: false
         default: '30'
         type: string
+      youtube_url:
+        description: 'Override the YouTube URL (defaults to the secret/config)'
+        required: false
+        default: ''
+        type: string
 
 jobs:
   check-and-stream:
@@ -68,9 +73,13 @@ jobs:
         FB_STREAM_KEY: ${{ secrets.FB_STREAM_KEY }}
         CHECK_ONLY: ${{ inputs.check_only || false }}
         WAIT_MINUTES: ${{ inputs.wait_minutes || '30' }}
+        YT_OVERRIDE: ${{ inputs.youtube_url }}
       run: |
         ARGS="--wait-for-live $WAIT_MINUTES"
         if [ "$CHECK_ONLY" = "true" ]; then
           ARGS="$ARGS --check-only"
+        fi
+        if [ -n "$YT_OVERRIDE" ]; then
+          ARGS="$ARGS --url $YT_OVERRIDE"
         fi
         python autostream.py $ARGS
