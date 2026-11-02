@@ -1,85 +1,75 @@
 # Stream Automation
 
-This project contains scripts to stream YouTube videos directly to Facebook Live using FFmpeg locally, with support for automated daily checks.
+Relays a YouTube live stream to Facebook Live using yt-dlp + FFmpeg, with a daily GitHub Actions check.
 
 ## Prerequisites
 
-1. Install Python 3.x
-2. Install dependencies:
+1. Python 3.x
+2. FFmpeg (installed automatically via `static-ffmpeg`, or system `ffmpeg`)
+3. Install Python dependencies:
    ```bash
    pip install -r requirements.txt
    ```
 
 ## Configuration
 
-1.  Rename `config.json` (or create it) with the following content:
-    ```json
-    {
-      "youtube_channel_url": "https://www.youtube.com/@YourChannel",
-      "facebook_stream_key": "rtmps://live-api-s.facebook.com:443/rtmp/YOUR-STREAM-KEY"
-    }
-    ```
+Edit `config.json` (or use environment variables — env vars win over the file):
+
+```json
+{
+  "youtube_url": "https://www.youtube.com/@YourChannel/live",
+  "facebook_stream_key": "rtmps://live-api-s.facebook.com:443/rtmp/YOUR-STREAM-KEY"
+}
+```
+
+**Never commit a real stream key to this file** — the repo is public and the key would be leaked. Put the real key in the `FB_STREAM_KEY` environment variable or GitHub secret instead.
+
+Supported `youtube_url` forms:
+- Channel handle — `https://www.youtube.com/@ChannelName` (auto-resolved to `@ChannelName/live`)
+- Live alias — `https://www.youtube.com/@ChannelName/live`
+- Video — `https://www.youtube.com/watch?v=VIDEO_ID`
 
 ## Usage
 
-### Auto Streamer (Recommended)
-Checks if the configured YouTube channel is live. If yes, it starts streaming to Facebook.
+### Preflight check (recommended before going live)
+Validates config, cookies, and that the stream is actually live — without streaming:
 ```bash
-python autostream.py
+python autostream.py --check-only
+```
+
+### Auto Streamer
+Checks whether the stream is live. If the configured URL is a scheduled/upcoming live, it polls until it starts (30 min by default), then streams to Facebook:
+```bash
+python autostream.py [--wait-for-live MINUTES] [--poll-seconds SECONDS]
+```
+
+Only an active live stream is relayed by default. To relay any playable video (e.g. a recording):
+```bash
+python autostream.py --stream-any
 ```
 
 ### Manual Stream
-To stream a specific video manually:
 ```bash
 python stream_facebook.py --url "YOUTUBE_VIDEO_URL" --key "YOUR-FB-STREAM-KEY"
 ```
 
-## Deployment to GitHub
-
-To deploy this code to your GitHub repository:
-
-1.  Initialize a Git repository (if not already done):
-    ```bash
-    git init
-    ```
-
-2.  Add files:
-    ```bash
-    git add .
-    ```
-
-3.  Commit changes:
-    ```bash
-    git commit -m "Initial commit for live-project-for-stremeo"
-    ```
-
-4.  Create a new repository named `live-project-for-stremeo` on GitHub.
-
-5.  Add your GitHub remote (replace `YOUR_USERNAME` with your actual GitHub username):
-    ```bash
-    git remote add origin https://github.com/YOUR_USERNAME/live-project-for-stremeo.git
-    ```
-
-6.  Push to GitHub:
-    ```bash
-    git branch -M main
-    git push -u origin main
-    ```
-
 ## GitHub Actions Automation
 
-This project includes a workflow to automatically check for a live stream daily at 8:00 AM IST.
+The **Daily Stream Check** workflow runs daily at 8:00 AM IST and can also be triggered manually.
 
-### Setup
+### Secrets (Repo Settings → Secrets and variables → Actions)
 
-1.  Push this code to a **GitHub** repository (GitHub Actions does not run on Bitbucket).
-2.  Go to your GitHub Repository Settings -> Secrets and variables -> Actions.
-3.  Add the following Repository Secrets:
-    *   `YOUTUBE_CHANNEL_URL`: The full URL of the YouTube channel to check (e.g., `https://www.youtube.com/@ChannelName`).
-    *   `FB_STREAM_KEY`: Your Facebook Live Stream Key (RTMP URL + Key).
+| Secret | Purpose |
+|---|---|
+| `YOUTUBE_URL` (or `YOUTUBE_CHANNEL_URL`) | YouTube video/channel URL to watch |
+| `FB_STREAM_KEY` | Facebook Live RTMP(S) key |
+| `YOUTUBE_COOKIES_BASE64` (or `YOUTUBE_COOKIES`) | Exported YouTube cookies — needed on datacenter runners to pass the "not a bot" check |
 
-### Manual Trigger
-You can also manually trigger the "Daily Stream Check" workflow from the "Actions" tab in GitHub.
+### Manual dispatch inputs
+- `check_only` — run all preflight checks without streaming.
+- `wait_minutes` — if the stream isn't live yet, keep polling this long (default 30).
+
+> GitHub disables scheduled workflows after 60 days of repo inactivity. If runs stop, re-enable the workflow under Actions → Daily Stream Check.
 
 ## Notes on Latency
-The `stream_facebook.py` script is configured with `-fflags nobuffer` and `-tune zerolatency` to minimize delay. Ensure your network connection is stable, as zero buffer makes the stream sensitive to network jitter.
+`stream_facebook.py` uses `-fflags nobuffer` and `-tune zerolatency` to minimize delay. Ensure your network connection is stable — zero buffer makes the stream sensitive to jitter.

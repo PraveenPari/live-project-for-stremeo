@@ -6,27 +6,35 @@ on:
     - cron: '30 2 * * *'
   workflow_dispatch:
     inputs:
-      platform:
-        description: 'Target Platform'
-        required: true
-        default: 'facebook'
-        type: choice
-        options:
-        - facebook
-        - instagram
+      check_only:
+        description: 'Run preflight checks only — do not start streaming'
+        required: false
+        default: false
+        type: boolean
+      wait_minutes:
+        description: 'If not live yet, keep polling this many minutes'
+        required: false
+        default: '30'
+        type: string
+      youtube_url:
+        description: 'Override the YouTube URL (defaults to the secret/config)'
+        required: false
+        default: ''
+        type: string
 
 jobs:
   check-and-stream:
     runs-on: ubuntu-latest
-    
+    timeout-minutes: 330
+
     steps:
     - name: Checkout code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
-        python-version: '3.10'
+        python-version: '3.12'
 
     - name: Set up Node.js (required by yt-dlp)
       uses: actions/setup-node@v4
@@ -38,10 +46,16 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y ffmpeg
         python -m pip install --upgrade pip
-        pip install --upgrade yt-dlp
+        pip install --upgrade yt-dlp bgutil-ytdlp-pot-provider
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
         echo "yt-dlp version:" && yt-dlp --version
         echo "node version:" && node --version
+
+    - name: Start PO Token provider (YouTube bot-check bypass)
+      run: |
+        docker run -d --name pot -p 4416:4416 brainicism/bgutil-ytdlp-pot-provider
+        for i in $(seq 1 15); do curl -sf http://localhost:4416/ping && break || sleep 2; done
+        echo
 
     - name: Setup Cookies
       env:
@@ -57,13 +71,21 @@ jobs:
         else
           echo "WARNING: No cookies secret set!"
         fi
-        if [ -f cookies.txt ]; then
-          head -3 cookies.txt
-        fi
 
     - name: Run Auto Streamer
       env:
         YOUTUBE_URL: ${{ secrets.YOUTUBE_URL }}
+        YOUTUBE_CHANNEL_URL: ${{ secrets.YOUTUBE_CHANNEL_URL }}
         FB_STREAM_KEY: ${{ secrets.FB_STREAM_KEY }}
+        CHECK_ONLY: ${{ inputs.check_only || false }}
+        WAIT_MINUTES: ${{ inputs.wait_minutes || '30' }}
+        YT_OVERRIDE: ${{ inputs.youtube_url }}
       run: |
-        python autostream.py
+        ARGS="--wait-for-live $WAIT_MINUTES"
+        if [ "$CHECK_ONLY" = "true" ]; then
+          ARGS="$ARGS --check-only"
+        fi
+        if [ -n "$YT_OVERRIDE" ]; then
+          ARGS="$ARGS --url $YT_OVERRIDE"
+        fi
+        python autostream.py $ARGS
