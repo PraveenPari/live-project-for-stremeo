@@ -46,10 +46,16 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y ffmpeg
         python -m pip install --upgrade pip
-        pip install --upgrade yt-dlp
+        pip install --upgrade yt-dlp bgutil-ytdlp-pot-provider
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
         echo "yt-dlp version:" && yt-dlp --version
         echo "node version:" && node --version
+
+    - name: Start PO Token provider (YouTube bot-check bypass)
+      run: |
+        docker run -d --name pot -p 4416:4416 brainicism/bgutil-ytdlp-pot-provider
+        for i in $(seq 1 15); do curl -sf http://localhost:4416/ping && break || sleep 2; done
+        echo
 
     - name: Setup Cookies
       env:
