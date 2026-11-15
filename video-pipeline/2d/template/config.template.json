@@ -1,0 +1,26 @@
+{
+  "name": "{{TITLE}}",
+  "width": 1920,
+  "height": 1080,
+  "duration": {{DURATION}},
+  "title": "{{TITLE}}",
+  "subtitle": "{{SUBTITLE}}",
+  "palette": {
+    "skyTop": "{{SKY_TOP}}",
+    "skyBottom": "{{SKY_BOTTOM}}",
+    "duskTop": "{{DUSK_TOP}}",
+    "duskBottom": "{{DUSK_BOTTOM}}",
+    "sun": "{{SUN}}",
+    "hillFar": "{{HILL_FAR}}",
+    "hillNear": "{{HILL_NEAR}}",
+    "groundTop": "{{GROUND_TOP}}",
+    "groundBottom": "{{GROUND_BOTTOM}}",
+    "grass": "{{GRASS}}",
+    "leaf": "{{LEAF}}",
+    "trunk": "{{TRUNK}}",
+    "body": "{{BODY}}",
+    "skin": "{{SKIN}}",
+    "accent": "{{ACCENT}}",
+    "ink": "{{INK}}"
+  }
+}

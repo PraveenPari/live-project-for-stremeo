@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Hello Chennai</title>
+    <link rel="stylesheet" href="fonts.css" />
+    <script src="gsap.min.js"></script>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body {
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background: #000;
+      }
+      #stage {
+        position: relative;
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+      }
+    </style>
+  </head>
+  <body>
+    <div
+      id="stage"
+      class="clip"
+      data-composition-id="main"
+      data-start="0"
+      data-duration="8.0"
+      data-width="1920"
+      data-height="1080"
+    ></div>
+
+    <script type="application/json" id="anim-config">
+{
+  "name": "hello-chennai",
+  "width": 1920,
+  "height": 1080,
+  "duration": 8.0,
+  "title": "Hello Chennai",
+  "subtitle": "made with code, not credits",
+  "palette": {
+    "skyTop": "#8ecae6",
+    "skyBottom": "#ffd6a5",
+    "duskTop": "#3d5a80",
+    "duskBottom": "#ee9b7a",
+    "sun": "#ffb703",
+    "hillFar": "#9bbf8a",
+    "hillNear": "#5c8f5a",
+    "groundTop": "#7fb069",
+    "groundBottom": "#3f6b46",
+    "grass": "#2f5d3a",
+    "leaf": "#4a8c4f",
+    "trunk": "#7a5230",
+    "body": "#e4572e",
+    "skin": "#f4c9a3",
+    "accent": "#ffb703",
+    "ink": "#1d2b36"
+  }
+}
+    </script>
+    <script src="anim.js"></script>
+  </body>
+</html>

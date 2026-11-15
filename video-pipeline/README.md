@@ -39,6 +39,16 @@ or the page loads with no timeline and capture hangs.
 - 10 s of 1080p30, `--quality looks`, 1 worker: **~34 s** (~3.4× realtime)
 - Low-memory host: HyperFrames pins itself to 1 capture worker; `-w` is ignored
 
+## Free 2D animation
+
+`video-pipeline/2d/` turns a one-line brief into a rendered 2D animation — no
+API key, no credits. See [2d/README.md](2d/README.md).
+
+```bash
+./video-pipeline/2d/make.py --title "Hello Chennai" --subtitle "made with code" \
+    --seconds 8 --out projects/hello --render
+```
+
 ## Proof (`examples/hello`)
 
 `examples/hello/index.html` is a 6 s 1080p30 title card rendered by this
